@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Toko Mora</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#f5f7f8;color:#1d2722;font-family:Arial,sans-serif}
+header{background:linear-gradient(135deg,#06b645,#1c9a65);color:white;padding:18px 16px;position:sticky;top:0;z-index:5}
+header h1{margin:0;font-size:22px}
+header p{margin:5px 0 0;font-size:13px}
+.container{max-width:700px;margin:auto;padding:16px}
+.card{background:white;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 4px 18px #00000012}
+label{display:block;font-weight:bold;font-size:14px;margin:12px 0 6px}
+input{width:100%;padding:12px;border:1px solid #ddd;border-radius:10px;font-size:15px}
+button{border:0;border-radius:10px;padding:12px 15px;font-weight:bold;cursor:pointer}
+.primary{background:#06b645;color:white;width:100%;margin-top:15px}
+.secondary{background:#eef2f0;color:#1d2722}
+.danger{background:#ffe7e7;color:#c62828}
+.product{display:flex;gap:12px;align-items:center;border:1px solid #eee;border-radius:12px;padding:10px;margin-top:10px}
+.product img{width:65px;height:65px;border-radius:10px;object-fit:cover;background:#eee}
+.product-info{flex:1}
+.product-info b{display:block}
+.product-info small{color:#666}
+.actions{display:flex;gap:6px}
+.actions button{padding:8px 10px;font-size:12px}
+#preview{width:100px;height:100px;object-fit:cover;border-radius:12px;margin-top:8px;display:none}
+.empty{text-align:center;color:#777;padding:20px}
+.note{font-size:13px;color:#666;line-height:1.5}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛒 Admin Toko Mora</h1>
+  <p>Kelola produk toko</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2 id="formTitle">➕ Tambah Produk</h2>
+
+    <label>Nama Produk</label>
+    <input id="name" type="text" placeholder="Contoh: Beras 5 Kg">
+
+    <label>Harga</label>
+    <input id="price" type="number" placeholder="Contoh: 75000">
+
+    <label>Stok</label>
+    <input id="stock" type="number" placeholder="Contoh: 20">
+
+    <label>Foto Produk</label>
+    <input id="image" type="file" accept="image/*">
+    <img id="preview">
+
+    <button class="primary" onclick="saveProduct()">Simpan Produk</button>
+    <button id="cancelBtn" class="secondary" style="width:100%;margin-top:8px;display:none" onclick="cancelEdit()">Batal Edit</button>
+  </div>
+
+  <div class="card">
+    <h2>📦 Daftar Produk</h2>
+    <div id="productList"></div>
+  </div>
+
+  <div class="card">
+    <p class="note">
+      Data pada versi awal ini disimpan di browser perangkat yang digunakan.
+      Setelah halaman admin ini berhasil dipasang, tahap berikutnya adalah
+      menghubungkannya ke database agar perubahan produk bisa tampil di website
+      Toko Mora untuk semua pengunjung.
+    </p>
+  </div>
+
+</div>
+
+<script>
+let products = JSON.parse(localStorage.getItem("tokoMoraProducts") || "[]");
+let editId = null;
+let selectedImage = "";
+
+const imageInput = document.getElementById("image");
+imageInput.addEventListener("change", function(){
+  const file = this.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    selectedImage = e.target.result;
+    const preview = document.getElementById("preview");
+    preview.src = selectedImage;
+    preview.style.display = "block";
+  };
+  reader.readAsDataURL(file);
+});
+
+function rupiah(n){
+  return new Intl.NumberFormat("id-ID",{
+    style:"currency",currency:"IDR",maximumFractionDigits:0
+  }).format(n);
+}
+
+function saveProduct(){
+  const name = document.getElementById("name").value.trim();
+  const price = Number(document.getElementById("price").value);
+  const stock = Number(document.getElementById("stock").value);
+
+  if(!name || !price){
+    alert("Nama produk dan harga wajib diisi.");
+    return;
+  }
+
+  if(editId){
+    const p = products.find(x => x.id === editId);
+    if(p){
+      p.name = name;
+      p.price = price;
+      p.stock = stock;
+      if(selectedImage) p.image = selectedImage;
+    }
+  }else{
+    products.push({
+      id: Date.now(),
+      name:name,
+      price:price,
+      stock:stock,
+      image:selectedImage
+    });
+  }
+
+  localStorage.setItem("tokoMoraProducts", JSON.stringify(products));
+  resetForm();
+  renderProducts();
+  alert("Produk berhasil disimpan.");
+}
+
+function renderProducts(){
+  const list = document.getElementById("productList");
+
+  if(products.length === 0){
+    list.innerHTML = '<div class="empty">Belum ada produk.</div>';
+    return;
+  }
+
+  list.innerHTML = products.map(p => `
+    <div class="product">
+      ${p.image ? `<img src="${p.image}">` : `<img src="" alt="">`}
+      <div class="product-info">
+        <b>${escapeHtml(p.name)}</b>
+        <small>${rupiah(p.price)} · Stok: ${p.stock}</small>
+      </div>
+      <div class="actions">
+        <button class="secondary" onclick="editProduct(${p.id})">Edit</button>
+        <button class="danger" onclick="deleteProduct(${p.id})">Hapus</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function editProduct(id){
+  const p = products.find(x => x.id === id);
+  if(!p) return;
+
+  editId = id;
+  document.getElementById("name").value = p.name;
+  document.getElementById("price").value = p.price;
+  document.getElementById("stock").value = p.stock;
+  selectedImage = p.image || "";
+
+  if(p.image){
+    const preview = document.getElementById("preview");
+    preview.src = p.image;
+    preview.style.display = "block";
+  }
+
+  document.getElementById("formTitle").textContent = "✏️ Edit Produk";
+  document.getElementById("cancelBtn").style.display = "block";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+function deleteProduct(id){
+  if(!confirm("Hapus produk ini?")) return;
+  products = products.filter(p => p.id !== id);
+  localStorage.setItem("tokoMoraProducts", JSON.stringify(products));
+  renderProducts();
+}
+
+function cancelEdit(){
+  resetForm();
+}
+
+function resetForm(){
+  editId = null;
+  selectedImage = "";
+  document.getElementById("name").value = "";
+  document.getElementById("price").value = "";
+  document.getElementById("stock").value = "";
+  document.getElementById("image").value = "";
+  document.getElementById("preview").style.display = "none";
+  document.getElementById("formTitle").textContent = "➕ Tambah Produk";
+  document.getElementById("cancelBtn").style.display = "none";
+}
+
+function escapeHtml(text){
+  const div=document.createElement("div");
+  div.textContent=text;
+  return div.innerHTML;
+}
+
+renderProducts();
+</script>
+
+</body>
+</html>
